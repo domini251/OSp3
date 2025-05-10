@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <unistd.h>
 #include <pthread.h>
 
@@ -24,6 +25,7 @@ int in = 0;
 int out = 0;
 int counter = 0;
 int next_item = 0;
+atomic_bool lock = false;
 /*
  * 생산된 아이템과 소비된 아이템의 로그와 개수를 기록하기 위한 변수
  */
@@ -42,8 +44,11 @@ void *producer(void *arg)
 {
     int i = *(int *)arg;
     int item;
-    
+    bool expected = true;
     while (alive) {
+        while (!atomic_compare_exchange_weak(&lock, &expected, true)) {
+            expected = false;
+        }
         /*
          * 새로운 아이템을 생산하여 버퍼에 넣고 관련 변수를 갱신한다.
          */
@@ -52,8 +57,8 @@ void *producer(void *arg)
         in = (in + 1) % BUFSIZE;
         counter++;
         /*
-         * 생산자를 기록하고 중복생산이 아닌지 검증한다.
-         */
+        * 생산자를 기록하고 중복생산이 아닌지 검증한다.
+        */
         if (task_log[item][0] == -1) {
             task_log[item][0] = i;
             produced++;
@@ -63,9 +68,10 @@ void *producer(void *arg)
             continue;
         }
         /*
-         * 생산한 아이템을 출력한다.
-         */
+        * 생산한 아이템을 출력한다.
+        */
         printf("<P%d,%d>\n", i, item);
+        lock = false;
     }
     pthread_exit(NULL);
 }
@@ -77,17 +83,20 @@ void *consumer(void *arg)
 {
     int i = *(int *)arg;
     int item;
-    
+    bool expected = false;
     while (alive) {
+        while (!atomic_compare_exchange_weak(&lock, &expected, 1)) {
+            expected = false;
+        }
         /*
-         * 버퍼에서 아이템을 꺼내고 관련 변수를 갱신한다.
-         */
+        * 버퍼에서 아이템을 꺼내고 관련 변수를 갱신한다.
+        */
         item = buffer[out];
         out = (out + 1) % BUFSIZE;
         counter--;
         /*
-         * 소비자를 기록하고 미생산 또는 중복소비 아닌지 검증한다.
-         */        
+        * 소비자를 기록하고 미생산 또는 중복소비 아닌지 검증한다.
+        */        
         if (task_log[item][0] == -1) {
             printf(RED"<C%d,%d>"RESET"....ERROR: 아이템 %d 미생산\n", i, item, item);
             continue;
@@ -101,9 +110,10 @@ void *consumer(void *arg)
             continue;
         }
         /*
-         * 소비할 아이템을 빨간색으로 출력한다.
-         */
+        * 소비할 아이템을 빨간색으로 출력한다.
+        */
         printf(RED"<C%d,%d>"RESET"\n", i, item);
+        lock = false;
     }
     pthread_exit(NULL);
 }

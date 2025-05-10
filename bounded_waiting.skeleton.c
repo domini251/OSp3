@@ -6,6 +6,7 @@
  */
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <unistd.h>
 #include <pthread.h>
 
@@ -24,6 +25,7 @@ char *color[N+1] = {"\e[0;30m","\e[0;31m","\e[0;32m","\e[0;33m","\e[0;34m","\e[0
  */
 bool waiting[N];
 bool alive = true;
+atomic_bool lock = false;
 
 /*
  * N 개의 스레드가 임계구역에 배타적으로 들어가기 위해 스핀락을 사용하여 동기화한다.
@@ -31,8 +33,11 @@ bool alive = true;
 void *worker(void *arg)
 {
     int i = *(int *)arg;
-    
+    bool expected = false;
+
     while (alive) {
+        while (!atomic_compare_exchange_weak(&lock, &expected, 1))
+            expected = false;
         /*
          * 임계구역: 알파벳 문자를 한 줄에 40개씩 10줄 출력한다.
          */
@@ -44,6 +49,7 @@ void *worker(void *arg)
         /*
          * 임계구역이 성공적으로 종료되었다.
          */
+        lock = false;
     }
     pthread_exit(NULL);
 }

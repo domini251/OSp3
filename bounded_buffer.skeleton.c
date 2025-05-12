@@ -50,6 +50,10 @@ void *producer(void *arg)
             expected = false;
         }
         //=========================
+        if(counter == BUFSIZE) {
+            lock = false;
+            continue;
+        }
         /*
          * 새로운 아이템을 생산하여 버퍼에 넣고 관련 변수를 갱신한다.
          */
@@ -88,10 +92,14 @@ void *consumer(void *arg)
     int item;
     bool expected = false;
     while (alive) {
-        while (!atomic_compare_exchange_weak(&lock, &expected, 1) && counter == 0) {
+        while (!atomic_compare_exchange_weak(&lock, &expected, 1)) {
             expected = false;
         }
         //=========================
+        if(counter == 0) {
+            lock = false;
+            continue;
+        }
         /*
         * 버퍼에서 아이템을 꺼내고 관련 변수를 갱신한다.
         */

@@ -25,6 +25,7 @@ char *color[N+1] = {"\e[0;30m","\e[0;31m","\e[0;32m","\e[0;33m","\e[0;34m","\e[0
  */
 bool waiting[N];
 bool alive = true;
+int turn = -1;
 atomic_bool lock = false;
 
 /*
@@ -34,6 +35,7 @@ void *worker(void *arg)
 {
     int i = *(int *)arg;
     bool expected = false;
+    waiting[i] = true;
 
     while (alive) {
         while (!atomic_compare_exchange_weak(&lock, &expected, 1))
@@ -41,10 +43,24 @@ void *worker(void *arg)
         /*
          * 임계구역: 알파벳 문자를 한 줄에 40개씩 10줄 출력한다.
          */
-        for (int k = 0; k < 400; ++k) {
-            printf("%s%c%s", color[i], 'A'+i, color[N]);
-            if ((k+1) % 40 == 0)
-                printf("\n");
+        if (turn == i || turn == -1) {
+            turn = (i + 1) % N;
+            waiting[i] = false;
+            for (int k = 0; k < 400; ++k) {
+                printf("%s%c%s", color[i], 'A'+i, color[N]);
+                if ((k+1) % 40 == 0)
+                    printf("\n");
+            }
+        }
+        for (int j = 0; j < N; ++j) {
+            if (waiting[j]) {
+                turn = j;
+                break;
+            }
+            else {
+                turn = -1;
+                break;
+            }
         }
         /*
          * 임계구역이 성공적으로 종료되었다.

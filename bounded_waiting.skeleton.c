@@ -23,10 +23,10 @@ char *color[N+1] = {"\e[0;30m","\e[0;31m","\e[0;32m","\e[0;33m","\e[0;34m","\e[0
  * waiting[i]는 스레드 i가 임계구역에 들어가기 위해 기다리고 있음을 나타낸다.
  * alive 값이 false가 될 때까지 스레드 내의 루프가 무한히 반복된다.
  */
-bool waiting[N];
+bool waiting[N] = {false, false, false, false, false, false, false, false};
 bool alive = true;
-int turn = -1;
 atomic_bool lock = false;
+bool wempty = true;
 
 /*
  * N 개의 스레드가 임계구역에 배타적으로 들어가기 위해 스핀락을 사용하여 동기화한다.
@@ -36,43 +36,42 @@ void *worker(void *arg)
     int i = *(int *)arg;
     bool expected = false;
     waiting[i] = true;
-
     while (alive) {
-        while (!atomic_compare_exchange_weak(&lock, &expected, 1))
+        printf("wait thread%d\n", i);
+        while (waiting[i] && !wempty) {
+            usleep(1);
+        }
+        printf("start %d/wempty = %d\n", i, wempty);
+        wempty = false;
+        while (!atomic_compare_exchange_weak(&lock, &expected, 1)) {
             expected = false;
+        }
+        waiting[i] = false;
         /*
          * 임계구역: 알파벳 문자를 한 줄에 40개씩 10줄 출력한다.
          */
-        printf("=================\n");
-        if (turn == i || turn == -1) {
-            turn = i;
-            waiting[i] = false;
-            for (int k = 0; k < 400; ++k) {
-                printf("%s%c%s", color[i], 'A'+i, color[N]);
-                if ((k+1) % 40 == 0)
-                    printf("\n");
-            }
-            for (int j = 1; j < N; ++j) {
-                turn =  (i + j) % N;
-                if (waiting[turn]) {
-                    break;
-                }
-                else 
-                    turn = -1;
-            }
+        for (int k = 0; k < 400; ++k) {
+            printf("%s%c%s", color[i], 'A'+i, color[N]);
+            if ((k+1) % 40 == 0)
+                printf("\n");
         }
-        else {
-            waiting[i] = true;
-        }
-        printf("waiting thread: ");
-        for(int j = 0; j < N; j++){
-            if(waiting[j])
-                printf("%d ", j);
-        }
-        printf("\nnew turn: %d\n", turn);
         /*
          * 임계구역이 성공적으로 종료되었다.
          */
+        int j = (1 + i) % N;
+        printf("i = %d, j = %d\n", i, j);
+        while ((j != i) && !waiting[j]) {
+            printf("i = %d, j = %d\n", i, j);
+            j = (j + 1) % N;
+        }
+        if (j == i){
+            printf("end %d. empty\n", i);
+            wempty = true;
+        }
+        else{
+            waiting[j] = false;
+            printf("end %d\n", j);
+        }
         lock = false;
     }
     pthread_exit(NULL);

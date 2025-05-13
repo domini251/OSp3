@@ -43,25 +43,33 @@ void *worker(void *arg)
         /*
          * 임계구역: 알파벳 문자를 한 줄에 40개씩 10줄 출력한다.
          */
+        printf("=================\n");
         if (turn == i || turn == -1) {
-            turn = (i + 1) % N;
+            turn = i;
             waiting[i] = false;
             for (int k = 0; k < 400; ++k) {
                 printf("%s%c%s", color[i], 'A'+i, color[N]);
                 if ((k+1) % 40 == 0)
                     printf("\n");
             }
-        }
-        for (int j = 0; j < N; ++j) {
-            if (waiting[j]) {
-                turn = j;
-                break;
-            }
-            else {
-                turn = -1;
-                break;
+            for (int j = 1; j < N; ++j) {
+                turn =  (i + j) % N;
+                if (waiting[turn]) {
+                    break;
+                }
+                else 
+                    turn = -1;
             }
         }
+        else {
+            waiting[i] = true;
+        }
+        printf("waiting thread: ");
+        for(int j = 0; j < N; j++){
+            if(waiting[j])
+                printf("%d ", j);
+        }
+        printf("\nnew turn: %d\n", turn);
         /*
          * 임계구역이 성공적으로 종료되었다.
          */
